@@ -35,19 +35,19 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ context }) => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-800 rounded-lg border border-slate-700 overflow-hidden shadow-xl">
-      <div className="p-3 bg-slate-900 border-b border-slate-700 flex items-center gap-2">
+    <div className="flex flex-col h-full bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
+      <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
         <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse"></div>
-        <span className="font-bold text-slate-200">AI 导师 (Gemini Powered)</span>
+        <span className="font-bold text-slate-700">AI 导师 (Gemini Powered)</span>
       </div>
       
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-white">
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[85%] p-3 rounded-lg text-sm leading-relaxed ${
               msg.role === 'user' 
                 ? 'bg-blue-600 text-white rounded-br-none' 
-                : 'bg-slate-700 text-slate-200 rounded-bl-none'
+                : 'bg-slate-100 text-slate-800 rounded-bl-none'
             }`}>
               {msg.text}
             </div>
@@ -55,7 +55,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ context }) => {
         ))}
         {isLoading && (
           <div className="flex justify-start">
-            <div className="bg-slate-700 p-3 rounded-lg rounded-bl-none flex gap-1">
+            <div className="bg-slate-100 p-3 rounded-lg rounded-bl-none flex gap-1">
               <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
               <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
               <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
@@ -64,19 +64,19 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({ context }) => {
         )}
       </div>
 
-      <div className="p-3 bg-slate-900 border-t border-slate-700">
+      <div className="p-3 bg-slate-50 border-t border-slate-200">
         <div className="flex gap-2">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="问我关于 Heap, Stack 或 GC 的问题..."
-            className="flex-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 placeholder-slate-500"
+            className="flex-1 bg-white border border-slate-300 rounded px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-blue-500 placeholder-slate-400"
           />
           <button 
             onClick={handleSend}
             disabled={isLoading || !input.trim()}
-            className="bg-blue-600 hover:bg-blue-500 disabled:bg-slate-600 text-white px-4 py-2 rounded text-sm transition-colors"
+            className="bg-blue-600 hover:bg-blue-500 disabled:bg-slate-300 text-white px-4 py-2 rounded text-sm transition-colors"
           >
             发送
           </button>
