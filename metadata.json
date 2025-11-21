@@ -1,0 +1,5 @@
+{
+  "name": "jvm-interactive",
+  "description": "Interactive educational animation of the Java Virtual Machine memory structure and data flow.",
+  "requestFramePermissions": []
+}
