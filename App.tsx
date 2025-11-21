@@ -188,58 +188,70 @@ export default function App() {
     }, 600);
   }, [isAnimating, stackFrames.length, addLog]);
 
-  const handleGC = useCallback(() => {
+  const handleGC = useCallback((isFullGC: boolean = false) => {
     if (isAnimating) return;
     setIsAnimating(true);
 
-    addLog("开始执行 Minor GC (Copying Algorithm)...", 'action');
+    const gcType = isFullGC ? 'Full GC (Major)' : 'Minor GC';
+    addLog(`开始执行 ${gcType} (Mark-Sweep/Copying)...`, 'action');
     triggerFlash(JVMPart.GC);
     setActivePart(JVMPart.GC);
 
     setTimeout(() => {
       triggerFlash(JVMPart.HEAP_YOUNG);
-      setActivePart(JVMPart.HEAP_YOUNG);
+      if (isFullGC) {
+        triggerFlash(JVMPart.HEAP_OLD);
+      }
+      setActivePart(isFullGC ? JVMPart.HEAP : JVMPart.HEAP_YOUNG);
 
-      // Use objects from state closure to determine survivors
+      // Use objects from state closure
       const currentObjects = objects;
       const living: VisualObject[] = [];
       let removedCount = 0;
       let promotedCount = 0;
       let oom = false;
       
-      // Check Old Gen space before promotion logic roughly
-      // In real GC, complex calculation happens. Here we simplify.
-      const currentOldCount = currentObjects.filter(o => o.gen === 'old').length;
-      
       // Filter and process
       currentObjects.forEach(obj => {
         if (obj.gen === 'old') {
-             living.push(obj);
+             if (isFullGC) {
+                 // Full GC: Simulate collecting dead objects in Old Gen (30% chance to die for demo)
+                 if (Math.random() > 0.3) {
+                     living.push(obj);
+                 } else {
+                     removedCount++;
+                 }
+             } else {
+                 // Minor GC: Old Gen objects are untouched
+                 living.push(obj);
+             }
              return;
         }
 
-        // Simulate survival chance (50%) for young objects
+        // Young Gen Logic: Survive or Die
+        // 50% survival rate for demo
         if (Math.random() > 0.5) {
              // Check if Old Gen has space
-             if (living.filter(o => o.gen === 'old').length < oldGenerationLimit) {
+             // Calculate current old gen count including those we just decided to keep
+             const currentOldCount = living.filter(o => o.gen === 'old').length;
+             
+             if (currentOldCount < oldGenerationLimit) {
                  living.push({ ...obj, gen: 'old' as const });
                  promotedCount++;
              } else {
-                 // Old Gen Full - Promotion Failure (Simulated OOM or Full GC required)
-                 // For this visualizer, we keep them in young or drop them if we want to be strict.
-                 // Let's assume OOM for Old Gen prevents promotion, effectively keeping them in Young or crashing.
-                 // We will drop them to simulate critical failure or just keep them in Young for visual chaos.
-                 // Let's keep them in Young to show overflow or drop if we want to clear space.
-                 // Let's Drop and log error for "OOM during promotion"
+                 // Promotion Failure (Old Gen Full)
+                 // For visualizer, we keep it in Young or drop it. 
+                 // Real JVM would trigger Full GC or OOM.
+                 // Here we mark OOM flag but keep object to show overflow or just keep it in Young
                  oom = true;
-                 living.push(obj); // Keep in Young (Survival failed due to no space in Old)
+                 living.push(obj); 
              }
         } else {
              removedCount++;
         }
       });
       
-      if (oom) {
+      if (oom && !isFullGC) {
            addLog("Major GC 警告: 老年代空间不足，对象无法晋升!", 'error');
            triggerFlash(JVMPart.HEAP_OLD);
       }
@@ -248,9 +260,9 @@ export default function App() {
       setCollectedCount(prev => prev + removedCount);
 
       if (removedCount > 0) {
-           addLog(`GC 清理完毕: 回收了 ${removedCount} 个对象`, 'info');
+           addLog(`${gcType} 清理完毕: 回收了 ${removedCount} 个对象`, 'info');
       } else {
-           addLog("GC 完成: 大部分对象存活", 'info');
+           addLog(`${gcType} 完成: 无对象需回收`, 'info');
       }
       
       setTimeout(() => {
@@ -274,15 +286,15 @@ export default function App() {
       
       const timer = setTimeout(() => {
           addLog("⚡ 达到阈值，自动触发 Minor GC", 'action');
-          handleGC(); 
+          handleGC(false); // Explicitly Minor GC
       }, 1500);
 
       return () => clearTimeout(timer);
     }
     
-    // Check Global OOM just in case
+    // Check Global OOM
     if (totalCount > maxHeapSize) {
-        addLog(`⚠️ 堆内存溢出! 当前对象: ${totalCount}, 最大堆: ${maxHeapSize}`, 'error');
+        addLog(`⚠️ 堆内存溢出! 当前: ${totalCount}, 最大: ${maxHeapSize}`, 'error');
     }
 
   }, [youngCount, totalCount, maxHeapSize, youngGenerationLimit, isAnimating, handleGC, addLog]);
@@ -297,55 +309,55 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-200 flex flex-col md:flex-row overflow-hidden">
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col md:flex-row overflow-hidden">
       
       {/* Left: Visualizer Area */}
       <div className="flex-1 flex flex-col h-screen overflow-y-auto md:overflow-hidden">
         {/* Header */}
-        <header className="p-4 border-b border-slate-700 bg-slate-950 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <header className="p-4 border-b border-slate-200 bg-white flex flex-col sm:flex-row justify-between items-center gap-4 shadow-sm z-10">
           <div>
-            <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
+            <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-emerald-600">
               JVM 结构原理可视化
             </h1>
-            <p className="text-slate-400 text-xs">Java Virtual Machine Interactive Learning</p>
+            <p className="text-slate-500 text-xs">Java Virtual Machine Interactive Learning</p>
           </div>
           <div className="flex gap-3 text-xs font-mono">
-             <div className="bg-slate-800 px-3 py-1.5 rounded border border-slate-700 flex flex-col items-center min-w-[80px]">
-                <span className="text-slate-400 text-[10px] uppercase">Total Heap</span>
-                <span className={`${totalCount >= maxHeapSize ? 'text-red-500 animate-pulse' : 'text-white'} font-bold text-lg`}>
-                  {totalCount}<span className="text-xs text-slate-500">/{maxHeapSize}</span>
+             <div className="bg-slate-50 px-3 py-1.5 rounded border border-slate-200 flex flex-col items-center min-w-[80px]">
+                <span className="text-slate-500 text-[10px] uppercase">Total Heap</span>
+                <span className={`${totalCount >= maxHeapSize ? 'text-red-500 animate-pulse' : 'text-slate-800'} font-bold text-lg`}>
+                  {totalCount}<span className="text-xs text-slate-400">/{maxHeapSize}</span>
                 </span>
              </div>
-             <div className="bg-slate-800 px-3 py-1.5 rounded border border-slate-700 flex flex-col items-center min-w-[80px]">
-                <span className="text-slate-400 text-[10px] uppercase">Eden/Survivor</span>
-                <span className={`${youngCount >= youngGenerationLimit ? 'text-orange-400' : 'text-emerald-400'} font-bold text-lg`}>
-                  {youngCount}<span className="text-xs text-slate-500">/{youngGenerationLimit}</span>
+             <div className="bg-slate-50 px-3 py-1.5 rounded border border-slate-200 flex flex-col items-center min-w-[80px]">
+                <span className="text-slate-500 text-[10px] uppercase">Eden/Survivor</span>
+                <span className={`${youngCount >= youngGenerationLimit ? 'text-orange-500' : 'text-emerald-600'} font-bold text-lg`}>
+                  {youngCount}<span className="text-xs text-slate-400">/{youngGenerationLimit}</span>
                 </span>
              </div>
-             <div className="bg-slate-800 px-3 py-1.5 rounded border border-slate-700 flex flex-col items-center min-w-[80px]">
-                <span className="text-slate-400 text-[10px] uppercase">Old Gen</span>
-                <span className={`${oldCount >= oldGenerationLimit ? 'text-red-400' : 'text-emerald-600'} font-bold text-lg`}>
-                  {oldCount}<span className="text-xs text-slate-500">/{oldGenerationLimit}</span>
+             <div className="bg-slate-50 px-3 py-1.5 rounded border border-slate-200 flex flex-col items-center min-w-[80px]">
+                <span className="text-slate-500 text-[10px] uppercase">Old Gen</span>
+                <span className={`${oldCount >= oldGenerationLimit ? 'text-red-500' : 'text-emerald-700'} font-bold text-lg`}>
+                  {oldCount}<span className="text-xs text-slate-400">/{oldGenerationLimit}</span>
                 </span>
              </div>
-             <div className="hidden lg:flex bg-slate-800 px-3 py-1.5 rounded border border-slate-700 flex-col items-center min-w-[80px]">
-                <span className="text-slate-400 text-[10px] uppercase">累计创建</span>
-                <span className="text-blue-400 font-bold text-lg">{objCounter}</span>
+             <div className="hidden lg:flex bg-slate-50 px-3 py-1.5 rounded border border-slate-200 flex-col items-center min-w-[80px]">
+                <span className="text-slate-500 text-[10px] uppercase">累计创建</span>
+                <span className="text-blue-600 font-bold text-lg">{objCounter}</span>
              </div>
-             <div className="hidden lg:flex bg-slate-800 px-3 py-1.5 rounded border border-slate-700 flex-col items-center min-w-[80px]">
-                <span className="text-slate-400 text-[10px] uppercase">累计回收</span>
-                <span className="text-orange-400 font-bold text-lg">{collectedCount}</span>
+             <div className="hidden lg:flex bg-slate-50 px-3 py-1.5 rounded border border-slate-200 flex-col items-center min-w-[80px]">
+                <span className="text-slate-500 text-[10px] uppercase">累计回收</span>
+                <span className="text-orange-600 font-bold text-lg">{collectedCount}</span>
              </div>
           </div>
         </header>
 
         {/* Main Diagram Grid */}
-        <main className="flex-1 p-4 overflow-y-auto">
+        <main className="flex-1 p-4 overflow-y-auto bg-slate-50">
           
           <ControlPanel 
              onAllocate={handleAllocation} 
              onBatchAllocate={handleOpenBatchModal}
-             onGC={handleGC}
+             onGC={() => handleGC(true)}
              onMethodCall={handleMethodCall}
              onMethodReturn={handleMethodReturn}
              onOpenSettings={handleOpenSettingsModal}
@@ -362,7 +374,7 @@ export default function App() {
                     isFlashing={flashingPart === JVMPart.CLASS_LOADER}
                     onClick={() => setActivePart(JVMPart.CLASS_LOADER)}
                 >
-                    <div className="flex flex-col items-center justify-center h-full opacity-50 text-xs text-center">
+                    <div className="flex flex-col items-center justify-center h-full opacity-60 text-xs text-center text-white font-medium">
                        <div>Bootstrap</div>
                        <div>Extension</div>
                        <div>App ClassLoader</div>
@@ -376,7 +388,7 @@ export default function App() {
                     isFlashing={flashingPart === JVMPart.METHOD_AREA}
                     onClick={() => setActivePart(JVMPart.METHOD_AREA)}
                 >
-                     <div className="p-2 text-xs font-mono text-slate-200 grid grid-cols-2 gap-2">
+                     <div className="p-2 text-xs font-mono text-white grid grid-cols-2 gap-2">
                         <div className="bg-purple-900/50 p-1 rounded">Runtime Const Pool</div>
                         <div className="bg-purple-900/50 p-1 rounded">Static Vars</div>
                         <div className="bg-purple-900/50 p-1 rounded">Class Metadata</div>
@@ -404,7 +416,7 @@ export default function App() {
                                 <span className="opacity-50">#{idx}</span>
                             </div>
                         ))}
-                        {stackFrames.length === 0 && <div className="text-center text-white/30 mt-10">栈空 (Empty Stack)</div>}
+                        {stackFrames.length === 0 && <div className="text-center text-white/40 mt-10">栈空 (Empty Stack)</div>}
                     </div>
                 </MemoryBlock>
 
@@ -417,7 +429,7 @@ export default function App() {
                         onClick={() => setActivePart(JVMPart.PC_REGISTER)}
                         heightClass="h-24"
                     >
-                        <div className="text-center mt-4 font-mono text-emerald-400">
+                        <div className="text-center mt-4 font-mono text-emerald-300 font-bold">
                             0x{Math.floor(Math.random()*10000).toString(16).toUpperCase()}
                         </div>
                     </MemoryBlock>
@@ -428,7 +440,7 @@ export default function App() {
                         onClick={() => setActivePart(JVMPart.NATIVE_STACK)}
                         heightClass="h-24"
                     >
-                       <div className="text-center mt-4 text-xs opacity-70">Native Libs</div>
+                       <div className="text-center mt-4 text-xs text-white/70">Native Libs</div>
                     </MemoryBlock>
                 </div>
             </div>
@@ -448,25 +460,25 @@ export default function App() {
                            className={`flex-1 border-2 border-dashed border-emerald-300/30 rounded p-2 transition-colors ${activePart === JVMPart.HEAP_YOUNG || flashingPart === JVMPart.HEAP_YOUNG ? 'bg-emerald-500/20' : ''}`}
                            onClick={(e) => { e.stopPropagation(); setActivePart(JVMPart.HEAP_YOUNG); }}
                         >
-                            <div className="text-xs text-emerald-200 mb-1 font-bold uppercase flex justify-between">
+                            <div className="text-xs text-emerald-100 mb-1 font-bold uppercase flex justify-between">
                                 <span>Young Generation (1/3)</span>
                                 <span className="text-[10px] opacity-70">Capacity: {youngGenerationLimit}</span>
                             </div>
                             <div className="flex h-[80%] gap-2">
                                 <div className="flex-[8] bg-emerald-900/40 rounded border border-emerald-500/30 p-1 relative flex flex-col">
-                                    <span className="absolute top-0 right-1 text-[10px] text-emerald-400 bg-black/50 px-1 rounded z-10">Eden</span>
+                                    <span className="absolute top-0 right-1 text-[10px] text-emerald-200 bg-black/20 px-1 rounded z-10">Eden</span>
                                     <div className="flex flex-wrap content-start gap-0.5 mt-4 overflow-y-auto h-full scrollbar-thin">
                                         {renderObjects('eden')}
                                     </div>
                                 </div>
                                 <div className="flex-1 bg-emerald-900/40 rounded border border-emerald-500/30 p-1 relative flex flex-col">
-                                    <span className="absolute top-0 right-1 text-[10px] text-emerald-400 bg-black/50 px-1 rounded z-10">S0</span>
+                                    <span className="absolute top-0 right-1 text-[10px] text-emerald-200 bg-black/20 px-1 rounded z-10">S0</span>
                                      <div className="flex flex-wrap content-start gap-0.5 mt-4 overflow-y-auto h-full scrollbar-thin">
                                         {renderObjects('s0')}
                                     </div>
                                 </div>
                                 <div className="flex-1 bg-emerald-900/40 rounded border border-emerald-500/30 p-1 relative flex flex-col">
-                                    <span className="absolute top-0 right-1 text-[10px] text-emerald-400 bg-black/50 px-1 rounded z-10">S1</span>
+                                    <span className="absolute top-0 right-1 text-[10px] text-emerald-200 bg-black/20 px-1 rounded z-10">S1</span>
                                     <div className="flex flex-wrap content-start gap-0.5 mt-4 overflow-y-auto h-full scrollbar-thin">
                                         {renderObjects('s1')}
                                     </div>
@@ -479,12 +491,12 @@ export default function App() {
                            className={`flex-[2] border-2 border-dashed border-emerald-600/50 rounded p-2 transition-colors ${activePart === JVMPart.HEAP_OLD || flashingPart === JVMPart.HEAP_OLD ? 'bg-emerald-800/20' : ''}`}
                            onClick={(e) => { e.stopPropagation(); setActivePart(JVMPart.HEAP_OLD); }}
                         >
-                            <div className="text-xs text-emerald-400 mb-1 font-bold uppercase flex justify-between">
+                            <div className="text-xs text-emerald-200 mb-1 font-bold uppercase flex justify-between">
                                 <span>Old Generation (2/3)</span>
                                 <span className="text-[10px] opacity-70">Capacity: {oldGenerationLimit}</span>
                             </div>
                             <div className="bg-emerald-950/40 rounded border border-emerald-700/30 h-[85%] p-2 flex flex-wrap content-start gap-0.5 overflow-y-auto relative scrollbar-thin">
-                                 <span className="absolute top-1 right-2 text-[10px] text-emerald-600 bg-black/50 px-1 rounded z-10">Tenured</span>
+                                 <span className="absolute top-1 right-2 text-[10px] text-emerald-300 bg-black/20 px-1 rounded z-10">Tenured</span>
                                  {renderObjects('old')}
                             </div>
                         </div>
@@ -503,7 +515,7 @@ export default function App() {
                             onClick={() => setActivePart(JVMPart.EXECUTION_ENGINE)}
                             heightClass="h-24"
                         >
-                            <div className="flex justify-around items-center h-full opacity-80">
+                            <div className="flex justify-around items-center h-full text-white opacity-90">
                                 <span className="border border-white/20 px-3 py-1 rounded bg-black/20">Interpreter</span>
                                 <span className="border border-white/20 px-3 py-1 rounded bg-black/20">JIT Compiler</span>
                                 <span className={`border border-white/20 px-3 py-1 rounded transition-colors ${flashingPart === JVMPart.GC ? 'bg-yellow-500 text-black font-bold' : 'bg-black/20'}`}>GC</span>
@@ -511,7 +523,7 @@ export default function App() {
                         </MemoryBlock>
                     </div>
                     <div className="col-span-3">
-                         <div className="h-24 border-2 border-slate-600 border-dashed rounded-lg flex items-center justify-center text-slate-500">
+                         <div className="h-24 border-2 border-slate-300 border-dashed rounded-lg flex items-center justify-center text-slate-400 bg-white">
                             Native Interface (JNI)
                          </div>
                     </div>
@@ -523,54 +535,54 @@ export default function App() {
       </div>
 
       {/* Right Sidebar: Info & Chat */}
-      <div className="w-full md:w-96 bg-slate-950 border-l border-slate-800 flex flex-col h-[50vh] md:h-screen">
+      <div className="w-full md:w-96 bg-white border-l border-slate-200 flex flex-col h-[50vh] md:h-screen shadow-lg z-20">
         
         {/* Logs Section */}
-        <div className="h-1/3 border-b border-slate-800 flex flex-col">
-            <div className="p-2 bg-slate-900 text-xs font-bold text-slate-400 uppercase tracking-wider">运行日志 (System Logs)</div>
-            <div className="flex-1 overflow-y-auto p-2 font-mono text-xs space-y-1">
+        <div className="h-1/3 border-b border-slate-200 flex flex-col">
+            <div className="p-2 bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">运行日志 (System Logs)</div>
+            <div className="flex-1 overflow-y-auto p-2 font-mono text-xs space-y-1 bg-white">
                 {logs.map((log) => (
                     <div key={log.id} className={`
-                        ${log.type === 'action' ? 'text-blue-400' : log.type === 'error' ? 'text-red-400' : 'text-slate-300'}
+                        ${log.type === 'action' ? 'text-blue-600' : log.type === 'error' ? 'text-red-600' : 'text-slate-600'}
                     `}>
-                        <span className="opacity-40">[{log.timestamp.toLocaleTimeString().split(' ')[0]}]</span> {log.message}
+                        <span className="opacity-50 text-slate-400">[{log.timestamp.toLocaleTimeString().split(' ')[0]}]</span> {log.message}
                     </div>
                 ))}
-                {logs.length === 0 && <div className="text-slate-600 italic p-2">等待操作...</div>}
+                {logs.length === 0 && <div className="text-slate-400 italic p-2">等待操作...</div>}
             </div>
         </div>
 
         {/* Active Component Detail */}
-        <div className="p-4 bg-slate-900 border-b border-slate-800">
+        <div className="p-4 bg-slate-50 border-b border-slate-200 min-h-[150px]">
              <h2 className="text-sm font-bold text-slate-400 uppercase mb-2">当前选中区域</h2>
              {activePart && JVM_COMPONENTS[activePart] ? (
                  <div>
-                     <h3 className="text-xl font-bold text-white mb-1">{JVM_COMPONENTS[activePart].name}</h3>
-                     <p className="text-sm text-emerald-400 mb-2">{JVM_COMPONENTS[activePart].description}</p>
-                     <p className="text-sm text-slate-300 leading-relaxed opacity-80">
+                     <h3 className="text-xl font-bold text-slate-800 mb-1">{JVM_COMPONENTS[activePart].name}</h3>
+                     <p className="text-sm text-emerald-600 font-semibold mb-2">{JVM_COMPONENTS[activePart].description}</p>
+                     <p className="text-sm text-slate-600 leading-relaxed">
                          {JVM_COMPONENTS[activePart].details}
                      </p>
                  </div>
              ) : (
-                 <div className="text-slate-500 text-sm italic">点击左侧图表区域查看详情...</div>
+                 <div className="text-slate-400 text-sm italic">点击左侧图表区域查看详情...</div>
              )}
         </div>
 
         {/* AI Chat */}
-        <div className="flex-1 p-4 bg-slate-950 overflow-hidden">
+        <div className="flex-1 p-4 bg-white overflow-hidden flex flex-col">
              <ChatAssistant context={activePart ? `用户当前选中的是: ${JVM_COMPONENTS[activePart].name}. 描述: ${JVM_COMPONENTS[activePart].details}` : '用户正在查看 JVM 全局概览'} />
         </div>
       </div>
 
       {/* Batch Allocation Modal */}
       {showBatchModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setShowBatchModal(false)}>
-            <div className="bg-slate-800 border border-slate-600 rounded-xl p-6 max-w-md w-full shadow-2xl transform transition-all scale-100" onClick={e => e.stopPropagation()}>
-                <h3 className="text-xl font-bold text-white mb-4">批量创建对象配置</h3>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setShowBatchModal(false)}>
+            <div className="bg-white border border-slate-200 rounded-xl p-6 max-w-md w-full shadow-2xl transform transition-all scale-100" onClick={e => e.stopPropagation()}>
+                <h3 className="text-xl font-bold text-slate-800 mb-4">批量创建对象配置</h3>
                 <div className="mb-6">
-                    <div className="flex justify-between text-sm text-slate-400 mb-2">
+                    <div className="flex justify-between text-sm text-slate-500 mb-2">
                         <span>生成数量</span>
-                        <span className="text-blue-400 font-mono text-lg">{batchSize}</span>
+                        <span className="text-blue-600 font-mono text-lg">{batchSize}</span>
                     </div>
                     <input 
                         type="range" 
@@ -578,9 +590,9 @@ export default function App() {
                         max="100" 
                         value={batchSize} 
                         onChange={(e) => setBatchSize(Number(e.target.value))}
-                        className="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                        className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                     />
-                    <div className="flex justify-between text-xs text-slate-600 mt-2">
+                    <div className="flex justify-between text-xs text-slate-400 mt-2">
                         <span>1</span>
                         <span>50</span>
                         <span>100</span>
@@ -589,7 +601,7 @@ export default function App() {
                 <div className="flex gap-3 justify-end">
                     <button 
                         onClick={() => setShowBatchModal(false)}
-                        className="px-4 py-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                        className="px-4 py-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded transition-colors"
                     >
                         取消
                     </button>
@@ -606,14 +618,14 @@ export default function App() {
 
       {/* Settings Modal */}
       {showSettingsModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setShowSettingsModal(false)}>
-            <div className="bg-slate-800 border border-slate-600 rounded-xl p-6 max-w-md w-full shadow-2xl transform transition-all scale-100" onClick={e => e.stopPropagation()}>
-                <h3 className="text-xl font-bold text-white mb-4">JVM 参数设置</h3>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setShowSettingsModal(false)}>
+            <div className="bg-white border border-slate-200 rounded-xl p-6 max-w-md w-full shadow-2xl transform transition-all scale-100" onClick={e => e.stopPropagation()}>
+                <h3 className="text-xl font-bold text-slate-800 mb-4">JVM 参数设置</h3>
                 
                 <div className="mb-6">
                     <div className="flex justify-between items-end mb-2">
-                         <label className="text-sm text-slate-300 font-semibold">堆内存最大对象数 (Heap Size)</label>
-                         <span className="text-emerald-400 font-mono text-xl">{maxHeapSize}</span>
+                         <label className="text-sm text-slate-600 font-semibold">堆内存最大对象数 (Heap Size)</label>
+                         <span className="text-emerald-600 font-mono text-xl">{maxHeapSize}</span>
                     </div>
                     <input 
                         type="range" 
@@ -622,24 +634,24 @@ export default function App() {
                         step="10"
                         value={maxHeapSize} 
                         onChange={(e) => setMaxHeapSize(Number(e.target.value))}
-                        className="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                        className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600"
                     />
-                    <div className="flex justify-between text-xs text-slate-500 mt-2">
+                    <div className="flex justify-between text-xs text-slate-400 mt-2">
                         <span>60 (Min)</span>
                         <span>500 (Max)</span>
                     </div>
                 </div>
 
-                <div className="bg-slate-900/50 p-4 rounded-lg mb-6 text-sm space-y-2">
+                <div className="bg-slate-50 p-4 rounded-lg mb-6 text-sm space-y-2 border border-slate-100">
                     <div className="flex justify-between">
-                        <span className="text-slate-400">Young Gen Limit (1/3):</span>
-                        <span className="text-emerald-300 font-mono">{youngGenerationLimit}</span>
+                        <span className="text-slate-500">Young Gen Limit (1/3):</span>
+                        <span className="text-emerald-600 font-mono">{youngGenerationLimit}</span>
                     </div>
                     <div className="flex justify-between">
-                        <span className="text-slate-400">Old Gen Limit (2/3):</span>
-                        <span className="text-emerald-300 font-mono">{oldGenerationLimit}</span>
+                        <span className="text-slate-500">Old Gen Limit (2/3):</span>
+                        <span className="text-emerald-600 font-mono">{oldGenerationLimit}</span>
                     </div>
-                    <div className="text-xs text-slate-500 mt-2 pt-2 border-t border-slate-700">
+                    <div className="text-xs text-slate-400 mt-2 pt-2 border-t border-slate-200">
                         * 当 Young Gen 达到上限时将自动触发 GC。
                     </div>
                 </div>
