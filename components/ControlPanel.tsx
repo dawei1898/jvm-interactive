@@ -20,13 +20,13 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   isAnimating 
 }) => {
   return (
-    <div className="flex flex-wrap gap-4 p-4 bg-slate-800 rounded-lg border border-slate-700 mb-4 shadow-lg">
-      <div className="text-slate-400 text-sm w-full font-semibold uppercase tracking-wider mb-1 flex justify-between items-center">
+    <div className="flex flex-wrap gap-4 p-4 bg-white rounded-lg border border-slate-200 mb-4 shadow-sm">
+      <div className="text-slate-500 text-sm w-full font-semibold uppercase tracking-wider mb-1 flex justify-between items-center">
         <span>控制台 (Simulation Controls)</span>
         <button 
           onClick={onOpenSettings}
           disabled={isAnimating}
-          className="text-xs bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded text-slate-300 flex items-center gap-1 transition-colors"
+          className="text-xs bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded text-slate-600 flex items-center gap-1 transition-colors"
         >
           ⚙️ 设置 (Settings)
         </button>

@@ -27,7 +27,7 @@ export const MemoryBlock: React.FC<MemoryBlockProps> = ({
         ${widthClass} ${heightClass}
         relative border-2 rounded-lg p-2 cursor-pointer transition-all duration-300
         flex flex-col
-        ${isActive ? 'ring-4 ring-white shadow-2xl scale-[1.02]' : 'opacity-90 hover:opacity-100 hover:scale-[1.01]'}
+        ${isActive ? 'ring-4 ring-slate-400 shadow-2xl scale-[1.02]' : 'opacity-90 hover:opacity-100 hover:scale-[1.01]'}
         ${isFlashing ? 'animate-pulse bg-yellow-500 border-yellow-300 text-black' : `${data.color} text-white`}
       `}
     >
